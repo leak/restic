@@ -9,6 +9,7 @@ import (
 	"github.com/restic/restic/internal/errors"
 	"github.com/restic/restic/internal/restic"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var cmdForget = &cobra.Command{
@@ -52,12 +53,12 @@ func init() {
 	cmdRoot.AddCommand(cmdForget)
 
 	f := cmdForget.Flags()
-	f.IntVarP(&forgetOptions.Last, "keep-last", "l", 0, "keep the last `n` snapshots")
-	f.IntVarP(&forgetOptions.Hourly, "keep-hourly", "H", 0, "keep the last `n` hourly snapshots")
-	f.IntVarP(&forgetOptions.Daily, "keep-daily", "d", 0, "keep the last `n` daily snapshots")
-	f.IntVarP(&forgetOptions.Weekly, "keep-weekly", "w", 0, "keep the last `n` weekly snapshots")
-	f.IntVarP(&forgetOptions.Monthly, "keep-monthly", "m", 0, "keep the last `n` monthly snapshots")
-	f.IntVarP(&forgetOptions.Yearly, "keep-yearly", "y", 0, "keep the last `n` yearly snapshots")
+	f.IntP("keep-last", "l", 0, "keep the last `n` snapshots")
+	f.IntP("keep-hourly", "H", 0, "keep the last `n` hourly snapshots")
+	f.IntP("keep-daily", "d", 0, "keep the last `n` daily snapshots")
+	f.IntP("keep-weekly", "w", 0, "keep the last `n` weekly snapshots")
+	f.IntP("keep-monthly", "m", 0, "keep the last `n` monthly snapshots")
+	f.IntP("keep-yearly", "y", 0, "keep the last `n` yearly snapshots")
 
 	f.Var(&forgetOptions.KeepTags, "keep-tag", "keep snapshots with this `taglist` (can be specified multiple times)")
 	// Sadly the commonly used shortcut `H` is already used.
@@ -70,9 +71,31 @@ func init() {
 
 	f.StringVarP(&forgetOptions.GroupBy, "group-by", "g", "host,paths", "string for grouping snapshots by host,paths,tags")
 	f.BoolVarP(&forgetOptions.DryRun, "dry-run", "n", false, "do not delete anything, just print what would be done")
-	f.BoolVar(&forgetOptions.Prune, "prune", false, "automatically run the 'prune' command if snapshots have been removed")
+	f.Bool("prune", false, "automatically run the 'prune' command if snapshots have been removed")
 
 	f.SortFlags = false
+
+	viper.BindPFlag("forget.keep-last", f.Lookup("keep-last"))
+	viper.BindPFlag("forget.keep-hourly", f.Lookup("keep-hourly"))
+	viper.BindPFlag("forget.keep-daily", f.Lookup("keep-daily"))
+	viper.BindPFlag("forget.keep-weekly", f.Lookup("keep-weekly"))
+	viper.BindPFlag("forget.keep-monthly", f.Lookup("keep-monthly"))
+	viper.BindPFlag("forget.keep-yearly", f.Lookup("keep-yearly"))
+
+	viper.BindPFlag("forget.prune", f.Lookup("prune"))
+
+	cobra.OnInitialize(unmarshalForgetOptions)
+}
+
+func unmarshalForgetOptions() {
+	viper.UnmarshalKey("forget.keep-last", &forgetOptions.Last)
+	viper.UnmarshalKey("forget.keep-hourly", &forgetOptions.Hourly)
+	viper.UnmarshalKey("forget.keep-daily", &forgetOptions.Daily)
+	viper.UnmarshalKey("forget.keep-weekly", &forgetOptions.Weekly)
+	viper.UnmarshalKey("forget.keep-monthly", &forgetOptions.Monthly)
+	viper.UnmarshalKey("forget.keep-yearly", &forgetOptions.Yearly)
+
+	viper.UnmarshalKey("forget.prune", &forgetOptions.Prune)
 }
 
 func runForget(opts ForgetOptions, gopts GlobalOptions, args []string) error {

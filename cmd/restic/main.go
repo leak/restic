@@ -14,22 +14,20 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/restic/restic/internal/config"
 	"github.com/restic/restic/internal/errors"
 )
 
-// cmdRoot is the base command when no other command has been specified.
-var cmdRoot = &cobra.Command{
-	Use:   "restic",
-	Short: "Backup and restore files",
-	Long: `
-restic is a backup program which allows saving multiple revisions of files and
-directories in an encrypted repository stored on different backends.
-`,
-	SilenceErrors:     true,
-	SilenceUsage:      true,
-	DisableAutoGenTag: true,
+var cmdRoot = &config.RootCmd
 
-	PersistentPreRunE: func(c *cobra.Command, args []string) error {
+var logBuffer = bytes.NewBuffer(nil)
+
+func init() {
+	// install custom global logger into a buffer, if an error occurs
+	// we can show the logs
+	log.SetOutput(logBuffer)
+
+	cmdRoot.PersistentPreRunE = func(c *cobra.Command, args []string) error {
 		// set verbosity, default is one
 		globalOptions.verbosity = 1
 		if globalOptions.Quiet && (globalOptions.Verbose > 1) {
@@ -54,12 +52,6 @@ directories in an encrypted repository stored on different backends.
 		if c.Name() == "version" {
 			return nil
 		}
-		pwd, err := resolvePassword(globalOptions, "RESTIC_PASSWORD")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Resolving password failed: %v\n", err)
-			Exit(1)
-		}
-		globalOptions.password = pwd
 
 		// run the debug functions for all subcommands (if build tag "debug" is
 		// enabled)
@@ -68,15 +60,7 @@ directories in an encrypted repository stored on different backends.
 		}
 
 		return nil
-	},
-}
-
-var logBuffer = bytes.NewBuffer(nil)
-
-func init() {
-	// install custom global logger into a buffer, if an error occurs
-	// we can show the logs
-	log.SetOutput(logBuffer)
+	}
 }
 
 func main() {

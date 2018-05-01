@@ -34,6 +34,9 @@ import (
 	"github.com/restic/restic/internal/errors"
 
 	"golang.org/x/crypto/ssh/terminal"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var version = "compiled manually"
@@ -42,6 +45,7 @@ var version = "compiled manually"
 type GlobalOptions struct {
 	Repo          string
 	PasswordFile  string
+	ConfigFile    string
 	Quiet         bool
 	Verbose       int
 	NoLock        bool
@@ -86,22 +90,62 @@ func init() {
 	})
 
 	f := cmdRoot.PersistentFlags()
-	f.StringVarP(&globalOptions.Repo, "repo", "r", os.Getenv("RESTIC_REPOSITORY"), "repository to backup to or restore from (default: $RESTIC_REPOSITORY)")
-	f.StringVarP(&globalOptions.PasswordFile, "password-file", "p", os.Getenv("RESTIC_PASSWORD_FILE"), "read the repository password from a file (default: $RESTIC_PASSWORD_FILE)")
+	f.StringP("repo", "r", "", "repository to backup to or restore from (default: $RESTIC_REPOSITORY)")
+	f.StringP("password-file", "p", "", "read the repository password from a file (default: $RESTIC_PASSWORD_FILE)")
 	f.BoolVarP(&globalOptions.Quiet, "quiet", "q", false, "do not output comprehensive progress report")
 	f.CountVarP(&globalOptions.Verbose, "verbose", "v", "be verbose (specify --verbose multiple times or level `n`)")
 	f.BoolVar(&globalOptions.NoLock, "no-lock", false, "do not lock the repo, this allows some operations on read-only repos")
 	f.BoolVarP(&globalOptions.JSON, "json", "", false, "set output mode to JSON for commands that support it")
 	f.StringVar(&globalOptions.CacheDir, "cache-dir", "", "set the cache directory")
 	f.BoolVar(&globalOptions.NoCache, "no-cache", false, "do not use a local cache")
-	f.StringSliceVar(&globalOptions.CACerts, "cacert", nil, "`file` to load root certificates from (default: use system certificates)")
+	f.StringSlice("cacert", nil, "path to load root certificates from (default: use system certificates)")
 	f.StringVar(&globalOptions.TLSClientCert, "tls-client-cert", "", "path to a file containing PEM encoded TLS client certificate and private key")
 	f.BoolVar(&globalOptions.CleanupCache, "cleanup-cache", false, "auto remove old cache directories")
 	f.IntVar(&globalOptions.LimitUploadKb, "limit-upload", 0, "limits uploads to a maximum rate in KiB/s. (default: unlimited)")
 	f.IntVar(&globalOptions.LimitDownloadKb, "limit-download", 0, "limits downloads to a maximum rate in KiB/s. (default: unlimited)")
 	f.StringSliceVarP(&globalOptions.Options, "option", "o", []string{}, "set extended option (`key=value`, can be specified multiple times)")
+	f.StringVarP(&globalOptions.ConfigFile, "config-file", "", "", "read the configuration from a TOML file")
+
+	viper.BindPFlag("global.repo", f.Lookup("repo"))
+	viper.BindPFlag("global.cacert", f.Lookup("cacert"))
+	viper.BindPFlag("global.password-file", f.Lookup("password-file"))
+
+	viper.BindEnv("global.repo", "RESTIC_REPOSITORY")
+	viper.BindEnv("global.password-file", "RESTIC_PASSWORD_FILE")
+	viper.BindEnv("global.password", "RESTIC_PASSWORD")
+
+	cobra.OnInitialize(unmarshalGlobalOptions)
 
 	restoreTerminal()
+}
+
+func unmarshalGlobalOptions() {
+	viper.UnmarshalKey("global.repo", &globalOptions.Repo)
+	viper.UnmarshalKey("global.password-file", &globalOptions.PasswordFile)
+	viper.UnmarshalKey("global.cacert", &globalOptions.CACerts)
+	viper.UnmarshalKey("global.password", &globalOptions.password)
+
+	if globalOptions.password == "" && globalOptions.PasswordFile != "" {
+		readPasswordFromFile()
+	}
+}
+
+func readPasswordFromFile() {
+	s, err := ioutil.ReadFile(globalOptions.PasswordFile)
+
+	if err != nil {
+		if os.IsNotExist(err) {
+			err = errors.Fatalf("%s does not exist", globalOptions.PasswordFile)
+		} else {
+			err = errors.Wrap(err, "Readfile")
+		}
+
+		fmt.Fprintf(os.Stderr, "Resolving password failed: %v\n", err)
+
+		Exit(1)
+	}
+
+	globalOptions.password = strings.TrimSpace(string(s))
 }
 
 // checkErrno returns nil when err is set to syscall.Errno(0), since this is no
@@ -230,23 +274,6 @@ func Exitf(exitcode int, format string, args ...interface{}) {
 
 	Warnf(format, args...)
 	Exit(exitcode)
-}
-
-// resolvePassword determines the password to be used for opening the repository.
-func resolvePassword(opts GlobalOptions, env string) (string, error) {
-	if opts.PasswordFile != "" {
-		s, err := ioutil.ReadFile(opts.PasswordFile)
-		if os.IsNotExist(err) {
-			return "", errors.Fatalf("%s does not exist", opts.PasswordFile)
-		}
-		return strings.TrimSpace(string(s)), errors.Wrap(err, "Readfile")
-	}
-
-	if pwd := os.Getenv(env); pwd != "" {
-		return pwd, nil
-	}
-
-	return "", nil
 }
 
 // readPassword reads the password from the given reader directly.

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	tomb "gopkg.in/tomb.v2"
 
 	"github.com/restic/restic/internal/archiver"
@@ -72,6 +73,7 @@ type BackupOptions struct {
 	Tags             []string
 	Hostname         string
 	FilesFrom        string
+	Files            []string
 	TimeStamp        string
 	WithAtime        bool
 }
@@ -96,6 +98,12 @@ func init() {
 	f.StringVar(&backupOptions.FilesFrom, "files-from", "", "read the files to backup from file (can be combined with file args)")
 	f.StringVar(&backupOptions.TimeStamp, "time", "", "time of the backup (ex. '2012-11-01 22:08:41') (default: now)")
 	f.BoolVar(&backupOptions.WithAtime, "with-atime", false, "store the atime for all files and directories")
+
+	cobra.OnInitialize(unmarshalBackupOptions)
+}
+
+func unmarshalBackupOptions() {
+	viper.UnmarshalKey("backup.files", &backupOptions.Files)
 }
 
 // filterExisting returns a slice of all existing items, or an error if no
@@ -285,6 +293,7 @@ func collectTargets(opts BackupOptions, args []string) (targets []string, err er
 	// args checks and have the ability to use both files-from and args at the
 	// same time
 	args = append(args, fromfile...)
+	args = append(args, opts.Files...)
 	if len(args) == 0 && !opts.Stdin {
 		return nil, errors.Fatal("nothing to backup, please specify target files/dirs")
 	}

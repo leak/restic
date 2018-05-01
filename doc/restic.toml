@@ -1,0 +1,16 @@
+[global]
+repo = "d:/test/repo-from-config"
+#password-file = "resticpw.txt"
+password = "testpass123"
+
+[backup]
+files = ["D:/testbackup/1", "D:/testbackup/2"]
+
+[forget]
+keep-last = 1
+#keep-hourly = 1
+#keep-daily = 1
+#keep-weekly = 1
+#keep-monthly = 1
+#keep-yearly = 1
+prune = true
